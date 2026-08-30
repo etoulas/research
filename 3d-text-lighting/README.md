@@ -8,10 +8,11 @@ drag around the canvas; it relights the faces and moves the shadow on the floor.
 
 **Live demo: https://etoulas.github.io/research/3d-text-lighting/**
 
-No libraries, no font files, no WebGL — one 2D canvas and about 500 lines of JS.
+No libraries, no font files, no WebGL — one 2D canvas and about 600 lines of JS.
 
 ![Default view](preview.png)
 ![Deeper, bolder, blue](preview-deep.png)
+![Grid guides, head on](preview-grid.png)
 
 ## Using it
 
@@ -26,6 +27,9 @@ No libraries, no font files, no WebGL — one 2D canvas and about 500 lines of J
 | **Drag the sun** | Moves the light in the plane at its current distance |
 | **Drag elsewhere** | Orbits the camera (yaw and pitch) |
 | **Material swatches** | Base colour |
+| **Grid** checkbox | Squared-paper guides in the plane of the letter fronts |
+| **Squares** knob | Grid squares per cap height, 1–10 |
+| **Front on** | Squares up head-on and switches to a near-orthographic projection |
 
 Knobs respond to vertical drags, the scroll wheel, and double-click to reset.
 Hold shift while dragging for fine control.
@@ -66,6 +70,29 @@ onto an offscreen canvas, then composited once with `globalAlpha` and a CSS blur
 — that way overlapping shadows don't stack into a black blob, and the edges come
 out soft for free.
 
+**The grid.** The guides are drawn in the plane of the letter *fronts*
+(`z = depth/2`), after the shadow and before the type, so the faces sit exactly
+on the paper and the letters occlude the lines behind them. It's ruled in
+cap-height units — `Squares` per cap height, a heavier line every whole cap
+height, and the baseline and cap line marked in the accent colour, which are the
+two rules you'd draw first on paper.
+
+Sizing it to the canvas needs the inverse projection onto a plane of constant z.
+That comes out in closed form: the camera transform is linear and the
+perspective divide is linear-fractional, so substituting `u = a(D-w)`,
+`v = b(D-w)` reduces it to a 2×2 linear system in (x, y), solved at the four
+canvas corners. The extent is clamped (the vanishing side of the plane runs to
+infinity) and the cell size doubles if the line count would get silly.
+
+**Front on** parks the camera 220 units back instead of 6.2, which is
+orthographic for all practical purposes, and squares up to yaw 0 / pitch 0.
+That matters: under perspective even a head-on view shows the side walls of
+off-centre letters and the squares aren't uniform, so you can't measure against
+them. Flat, cap height is exactly `Squares` squares anywhere on the canvas and
+the letters are 1:1 with the grid. The floor and its shadow are skipped in this
+mode — edge-on, they'd only smear over the squares under the baseline — but the
+lamp still shades the faces and can still be dragged.
+
 **Framing.** The focal length and screen centre are solved every frame from the
 projected bounding box of the actual geometry, so no combination of depth,
 boldness, orbit angle and text length can push the word off the canvas.
@@ -82,9 +109,9 @@ rescales.
 
 - `index.html` — page, styling, knob and swatch markup
 - `font.js` — the stroke font and its flattener
-- `app.js` — extrusion, camera, renderer, shadows, knob widget, interaction
+- `app.js` — extrusion, camera, renderer, shadows, grid, knob widget, interaction
 - `notes.md` — working notes, including the bugs hit along the way
-- `preview.png`, `preview-deep.png` — screenshots
+- `preview.png`, `preview-deep.png`, `preview-grid.png` — screenshots
 
 ## Known limitations
 
@@ -93,3 +120,5 @@ rescales.
   that it holds up.
 - Letters don't shadow *each other* — the shadow is cast onto the floor only.
 - The font is caps-only; unmapped characters are skipped.
+- Stroke width isn't snapped to the grid, so boldness generally lands between
+  squares. Set it by eye against the guides if you want a whole number.

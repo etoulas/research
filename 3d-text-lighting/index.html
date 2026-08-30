@@ -78,7 +78,15 @@
     border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 12.5px;
   }
   button:hover { background: #2b2e39; }
+  button.on { background: var(--accent); border-color: var(--accent); color: #17181d; font-weight: 600; }
   .hint { color: var(--dim); font-size: 12px; max-width: 260px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .check {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    background: #0e0f14; border: 1px solid var(--edge); border-radius: 8px;
+    padding: 7px 11px; font-size: 12.5px; user-select: none;
+  }
+  .check input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
   @media (max-width: 640px) { .panel { gap: 14px; } input[type=text] { width: 100%; } }
 </style>
 </head>
@@ -86,7 +94,7 @@
 
 <header>
   <h1>3D Stroke Type</h1>
-  <p>Drag the <strong>sun</strong> to move the light · drag anywhere else to orbit · drag knobs vertically (shift = fine, wheel, double-click resets)</p>
+  <p>Drag the <strong>sun</strong> to move the light · drag anywhere else to orbit · drag knobs vertically (shift = fine, wheel, double-click resets) &middot; switch on the <strong>grid</strong> to copy the letters onto squared paper</p>
 </header>
 
 <div id="stagewrap"><canvas id="stage"></canvas></div>
@@ -107,6 +115,14 @@
       <div class="swatch" data-c="#5fb0ff"></div>
       <div class="swatch" data-c="#ff6f61"></div>
       <div class="swatch" data-c="#6fd08c"></div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Guides</label>
+    <div class="row">
+      <label class="check"><input id="grid" type="checkbox"> Grid</label>
+      <button id="front">Front on</button>
     </div>
   </div>
 

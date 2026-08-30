@@ -86,3 +86,38 @@ Screenshotted defaults, all 26 letters, the digits and punctuation, a scripted
 light drag, and the parameter extremes (depth 0 and 1.4, boldness 0.03 and
 0.26, intensity 0, empty and whitespace-only text). No console errors in any
 case.
+
+## Follow-up: squared-paper guides
+
+Goal: a toggleable grid that extends outward from the front of the letters,
+like drawing on a checked notebook — and that actually helps with copying the
+letters onto real squared paper.
+
+- **Where the grid lives.** In the plane of the letter *fronts*, `z = depth/2`,
+  drawn after the shadow and before the type, so the faces sit exactly on the
+  paper and the letters occlude the lines they cover. Ruled in cap-height units
+  (`gridDiv` squares per cap height, default 4), with a heavier line every whole
+  cap height and the baseline and cap line picked out in the accent colour.
+- **Sizing the grid to the canvas.** Needed the inverse projection onto a plane
+  `z = zp`. No iteration required: the camera transform is linear and the
+  perspective divide is linear-fractional, so substituting `u = a(D-w)` and
+  `v = b(D-w)` turns it into a 2x2 linear system in (x, y). Solved at the four
+  canvas corners to get the visible extent, clamped to ±26 cap-heights because
+  the vanishing side of the plane runs to infinity, and the cell size doubles
+  if the line count would exceed ~900.
+- **Perspective defeats the point.** A 3/4 perspective view can't be measured
+  against squares — even head-on, a point camera shows the side walls of
+  off-centre letters. So the *Front on* button parks the eye at 220 units
+  instead of 6.2, which is orthographic for all practical purposes, and squares
+  up to yaw 0 / pitch 0. Now cap height is exactly `gridDiv` squares anywhere on
+  the canvas and the letters measure 1:1.
+  - This needed one fix: `fit()` capped the focal length at a flat 2200, which
+    is right at eye distance 6.2 and wildly wrong at 220 — the type came out
+    postage-stamp sized. The cap now scales with eye distance.
+  - In flat view the floor is edge-on and its shadow smears into a grey slab
+    over the squares below the baseline, so both are skipped in that mode. The
+    lighting still shades the front faces, and the lamp is still draggable.
+
+Checked: grid on/off, front on/off/reset round-trip, a light drag while flat,
+`gridDiv` at 1 and 8, depth 0 and 1.2, and a hard orbit while flat. No console
+errors, and the state ends up where it should after each toggle.

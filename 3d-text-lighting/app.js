@@ -8,6 +8,9 @@ const S = {
   lightZ: 2.6,
   intensity: 1.15,
   softness: 12,     // shadow blur radius, px
+  grid: false,      // squared-paper guides in the plane of the letter fronts
+  gridDiv: 4,       // squares per cap height
+  flat: false,      // head-on, near-orthographic: what you'd copy from
   yaw: -0.30,
   pitch: 0.22,
   light: { x: -1.2, y: 1.8, z: 2.6 },
@@ -15,7 +18,11 @@ const S = {
 };
 
 const FLOOR_Y = -0.45;
-const EYE_D = 6.2;     // camera distance in world units
+// Camera distance. Pushing the eye far away makes the projection effectively
+// orthographic, which is what the flat copying view wants: no perspective means
+// the grid squares stay square and the letters measure 1:1 against them.
+let EYE_D = 6.2;
+const EYE_NEAR_D = 6.2, EYE_FLAT_D = 220;
 const NEAR = 0.6;      // near clip in camera space
 
 const canvas = document.getElementById('stage');
@@ -212,6 +219,45 @@ function placeLightAtScreen(sx, sy) {
   }
 }
 
+/** Clip a camera-space segment to z <= EYE_D - NEAR. Null if it's all behind. */
+function clipSegNear(a, b) {
+  const lim = EYE_D - NEAR;
+  const ain = a[2] <= lim, bin = b[2] <= lim;
+  if (ain && bin) return [a, b];
+  if (!ain && !bin) return null;
+  const t = (lim - a[2]) / (b[2] - a[2]);
+  const m = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, lim];
+  return ain ? [a, m] : [m, b];
+}
+
+/**
+ * Inverse projection onto the world plane z = zp. The camera transform is
+ * linear and the perspective divide is linear-fractional, so substituting
+ * u = a(D-w), v = b(D-w) turns the whole thing into a 2x2 linear system in
+ * (x, y) -- no iteration needed.
+ */
+function unprojectToPlaneZ(sx, sy, zp) {
+  const { cy, sy: syw, cp, sp } = cam;
+  const a = (sx - CX) / FOCAL;
+  const b = -(sy - CY) / FOCAL;
+
+  // u, v, w as affine functions of (x - Tx, y - Ty), at fixed world z = zp
+  const ux = cy, uy = 0, u0 = syw * zp;
+  const vx = sp * syw, vy = cp, v0 = -sp * cy * zp;
+  const wx = -cp * syw, wy = sp, w0 = cp * cy * zp;
+
+  const m11 = ux + a * wx, m12 = uy + a * wy;
+  const m21 = vx + b * wx, m22 = vy + b * wy;
+  const r1 = a * EYE_D - u0 - a * w0;
+  const r2 = b * EYE_D - v0 - b * w0;
+  const det = m11 * m22 - m12 * m21;
+  if (Math.abs(det) < 1e-9) return null;
+  return [
+    TARGET[0] + (r1 * m22 - m12 * r2) / det,
+    TARGET[1] + (m11 * r2 - r1 * m21) / det,
+  ];
+}
+
 // ------------------------------------------------------------- utilities ----
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 function hexToRgb(h) {
@@ -261,7 +307,9 @@ function fit() {
   FOCAL = Math.min(
     (0.82 * W) / Math.max(1e-5, umax - umin),
     (0.52 * H) / Math.max(1e-5, vmax - vmin),
-    2200,
+    // the zoom cap scales with eye distance -- the flat view parks the camera
+    // far away, so its focal length is proportionally larger
+    (2200 * EYE_D) / EYE_NEAR_D,
   );
   CX = W / 2 - (FOCAL * (umin + umax)) / 2;
   CY = 0.42 * H + (FOCAL * (vmin + vmax)) / 2;
@@ -331,6 +379,69 @@ function drawShadow() {
   ctx.globalAlpha = clamp(0.38 + S.intensity * 0.26, 0, 0.88);
   if (S.softness > 0.5) ctx.filter = `blur(${S.softness.toFixed(1)}px)`;
   ctx.drawImage(shadowCv, 0, 0, W, H);
+  ctx.restore();
+}
+
+/**
+ * Squared-paper guides drawn in the plane of the letter *fronts*, so the grid
+ * carries the same perspective as the type and the faces sit exactly on it.
+ * Ruled in cap-height units: `gridDiv` squares per cap height, with the
+ * baseline and cap line picked out, so the drawing can be copied square for
+ * square onto a real checked page.
+ */
+function drawGrid() {
+  const zp = Math.max(S.depth / 2, 0.0006);
+
+  // how much of the plane the canvas actually sees
+  const corners = [[0, 0], [W, 0], [W, H], [0, H]]
+    .map((c) => unprojectToPlaneZ(c[0], c[1], zp))
+    .filter(Boolean);
+  if (corners.length < 4) return;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const c of corners) {
+    x0 = Math.min(x0, c[0]); x1 = Math.max(x1, c[0]);
+    y0 = Math.min(y0, c[1]); y1 = Math.max(y1, c[1]);
+  }
+  // the vanishing side of the plane runs away to infinity -- keep it sane
+  const SPAN = 26;
+  x0 = clamp(x0, -SPAN, SPAN); x1 = clamp(x1, -SPAN, SPAN);
+  y0 = clamp(y0, -SPAN, SPAN); y1 = clamp(y1, -SPAN, SPAN);
+  if (x1 - x0 < 1e-3 || y1 - y0 < 1e-3) return;
+
+  let cell = 1 / S.gridDiv;
+  while ((x1 - x0 + y1 - y0) / cell > 900) cell *= 2;   // never flood the canvas
+
+  const line = (ax, ay, bx, by, style, width) => {
+    const seg = clipSegNear(toCam([ax, ay, zp]), toCam([bx, by, zp]));
+    if (!seg) return;
+    const p = projCam(seg[0]), q = projCam(seg[1]);
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(p[0], p[1]);
+    ctx.lineTo(q[0], q[1]);
+    ctx.stroke();
+  };
+
+  const MINOR = 'rgba(126,170,255,0.16)';
+  const MAJOR = 'rgba(126,170,255,0.34)';
+  const RULE = 'rgba(232,176,75,0.55)';
+  const major = Math.max(1, Math.round(1 / cell));   // a heavier line each cap height
+
+  ctx.save();
+  for (let k = Math.ceil(x0 / cell); k * cell <= x1; k++) {
+    const x = k * cell;
+    const big = k % major === 0;
+    line(x, y0, x, y1, big ? MAJOR : MINOR, big ? 1.3 : 1);
+  }
+  for (let k = Math.ceil(y0 / cell); k * cell <= y1; k++) {
+    const y = k * cell;
+    const big = k % major === 0;
+    line(x0, y, x1, y, big ? MAJOR : MINOR, big ? 1.3 : 1);
+  }
+  // baseline and cap line: the two rules you'd draw first on paper
+  line(x0, 0, x1, 0, RULE, 1.8);
+  line(x0, 1, x1, 1, RULE, 1.8);
   ctx.restore();
 }
 
@@ -424,6 +535,7 @@ function drawLight() {
 
 function draw() {
   if (!W) return;
+  EYE_D = S.flat ? EYE_FLAT_D : EYE_NEAR_D;
   updateCamera();
   fit();
   if (pendingReanchor) {
@@ -435,8 +547,13 @@ function draw() {
   bg.addColorStop(1, '#1b1d26');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
-  drawFloor();
-  drawShadow();
+  // the flat view is for copying, not for staging: an edge-on floor and its
+  // smeared shadow would only obscure the squares under the baseline
+  if (!S.flat) {
+    drawFloor();
+    drawShadow();
+  }
+  if (S.grid) drawGrid();
   drawText();
   drawLight();
 }
@@ -474,7 +591,7 @@ function makeKnob(host, opt) {
     val.textContent = opt.format ? opt.format(v) : v.toFixed(2);
   }
   function set(nv) {
-    v = clamp(nv, opt.min, opt.max);
+    v = clamp(opt.step ? Math.round(nv / opt.step) * opt.step : nv, opt.min, opt.max);
     render();
     opt.onChange(v);
   }
@@ -527,6 +644,24 @@ makeKnob(knobRow, {
   format: (v) => v.toFixed(0),
   onChange: (v) => { S.softness = v; draw(); },
 });
+makeKnob(knobRow, {
+  label: 'Squares', min: 1, max: 10, value: S.gridDiv, step: 1,
+  format: (v) => `${v} / cap`,
+  onChange: (v) => { S.gridDiv = v; if (S.grid) draw(); },
+});
+
+const gridBox = document.getElementById('grid');
+gridBox.checked = S.grid;
+gridBox.addEventListener('change', () => { S.grid = gridBox.checked; draw(); });
+
+const frontBtn = document.getElementById('front');
+frontBtn.addEventListener('click', () => {
+  S.flat = !S.flat;
+  if (S.flat) { S.yaw = 0; S.pitch = 0; }   // square up to the page
+  frontBtn.classList.toggle('on', S.flat);
+  pendingReanchor = true;
+  draw();
+});
 
 const input = document.getElementById('text');
 input.value = S.text;
@@ -548,6 +683,8 @@ document.querySelector('.swatch').classList.add('on');
 
 document.getElementById('reset').addEventListener('click', () => {
   S.yaw = -0.30; S.pitch = 0.22;
+  S.flat = false;
+  frontBtn.classList.remove('on');
   lightAnchor = [0.11, 0.14];
   pendingReanchor = true;
   draw();
