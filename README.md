@@ -183,7 +183,17 @@ for dirname, _ in subdirs_with_dates:
             readme_path.write_text('\n'.join(new_lines))
 
 ]]]-->
-## 0 research projects
+## 1 research projects
+
+### [3D Stroke Type](https://github.com/etoulas/research/tree/main/3d-text-lighting#readme) (2026-08-30 19:25)
+
+A browser toy that types text as extruded 3D letters, built entirely from a hand-authored stroke font and a single 2D canvas — no WebGL, no font files, roughly 600 lines of JavaScript. Each glyph is a builder function parameterized by cap height (in grid squares) and stroke width, with centre lines placed so that stroke edges land exactly on grid intersections; straight strokes are used wherever a letter permits, arcs only where the shape demands them (S, O, C, G, Q, U, most digits). Chains are offset along angle bisectors, extruded into prisms with analytic per-face normals, back-face culled, and drawn with a painter's algorithm under a point light with ambient/Lambert/Blinn shading. Shadows come from projecting each prism's eight corners onto a floor plane and compositing the convex hulls once through an offscreen canvas, so overlaps stay soft rather than stacking to black. The [live demo](https://etoulas.github.io/research/3d-text-lighting/) exposes depth, stroke, cap height, light distance, intensity and softness as knobs, plus a draggable sun and orbiting camera.
+
+- Grid alignment is verified programmatically, not by eye: axis-aligned glyphs across 20 cap-height × stroke-width combinations assert every prism vertex hits a lattice point, with worst error 3.6e-15 squares.
+- The first verification run caught a real bug — degenerate chains for `.` and `:` were nudged into stubs, putting 12 vertices off by 1e-4.
+- Screen-drag to world-space light movement uses a numerically built 2×2 Jacobian of the projection, inverted and iterated Newton-style; the lamp is stored as a canvas fraction so it survives view refits.
+- Grid sizing needs an inverse projection onto a constant-z plane, which reduces in closed form to a 2×2 linear system solved at the canvas corners.
+- Known gaps: letters don't shadow each other, the font is caps-only, and diagonals/curves can only be pinned at endpoints and extremes.
 
 <!--[[[end]]]-->
 

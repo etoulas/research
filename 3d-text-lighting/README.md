@@ -1,5 +1,10 @@
 # 3D Stroke Type
 
+<!-- AI-GENERATED-NOTE -->
+> [!NOTE]
+> This is an AI-generated research report. All text and code in this report was created by an LLM (Large Language Model). For more information on how these reports are created, see the [main research repository](https://github.com/etoulas/research).
+<!-- /AI-GENERATED-NOTE -->
+
 An interactive toy that renders whatever you type as extruded 3D letters built
 from a hand-authored stroke font — straight lines wherever a letter can be made
 of them, arcs only where the shape genuinely needs one (S, O, C, G, Q, U, and
