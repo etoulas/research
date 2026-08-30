@@ -121,3 +121,48 @@ letters onto real squared paper.
 Checked: grid on/off, front on/off/reset round-trip, a light drag while flat,
 `gridDiv` at 1 and 8, depth 0 and 1.2, and a hard orbit while flat. No console
 errors, and the state ends up where it should after each toggle.
+
+## Follow-up 2: building the letters *on* the grid
+
+The grid overlay wasn't enough — the letters have to actually follow the lines:
+the left edge of an E on one vertical, its inner edge on the next, so the stroke
+is exactly one square wide (or two, or three).
+
+**Why the old font couldn't do that.** Its glyphs were hardcoded decimal
+coordinates on a cap height of 1, and boldness was a continuous knob. Strokes
+are *centre* lines, so an edge lands at `centre ± bold/2` — with both numbers
+arbitrary, an edge landing on a grid line was pure coincidence.
+
+**The fix: generate the font from the grid.** `font.js` is now parametric in two
+integers — `H` squares per cap height and `N` squares of stroke width — and
+every glyph is a builder function of those. The trick is that the extruder
+already insets nothing and caps by `N/2`, so a centre line at `x = N/2` yields a
+stroke spanning exactly `[0, N]`. So the metrics are:
+
+- `x0 = N/2`, `x1 = W - N/2` — stems whose outer edges are the glyph's 0 and W
+- `y0 = N/2`, `y1 = H - N/2` — bars sitting exactly on the baseline / cap line
+- `mid = ceil((H-N)/2) + N/2` — a middle bar with both edges on lines
+- `sc(c) = round(c - N/2) + N/2` — snaps any other centre line so its two edges
+  land on lines (needed for T, Y, I, M, W, 1, 4 …)
+
+Glyph width is `round(H * ratio)` squares, advance is `W + 1`, and the whole word
+is laid out starting at a whole-square offset — otherwise centring a word of odd
+total width would put every glyph origin on a half square and break the phase
+across the line.
+
+**What can't be aligned.** Diagonals and curves — no straight diagonal has its
+long edges on grid lines, and no ellipse does either. Those are pinned the way
+you'd pin them on paper: end points on lattice points, and every bowl's extremes
+touching the glyph's bounding lines.
+
+**Verification.** Rather than eyeballing it, a headless check builds the
+axis-aligned glyphs (`EFHILT.:-+`) at cap heights 4/6/8/11/14 × strokes 1/2/3/5
+and asserts every prism vertex lands on a grid intersection. First run: 12
+vertices off by ~1e-4 of a square, the same 12 every time — the three dots in
+`.` and `:`. `extrudeChain` turned a zero-length chain into a stub by nudging
+the endpoint 1e-4, and that nudge was the error. Dots now build their square
+directly. Second run: 0 off-grid, worst error 3.6e-15.
+
+Two glyphs needed redrawing after the port: `?` had its arch and stem at the
+same height so the stem came out horizontal, and Q's tail reached the glyph's
+bottom-right corner and read as continuous with the R's leg next to it.

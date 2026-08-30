@@ -3,13 +3,16 @@
 // ---------------------------------------------------------------- state ----
 const S = {
   text: 'HELLO',
-  bold: 0.115,      // stroke half-width is bold/2, in cap-height units
+  // The font is generated from the grid: `capSq` squares per cap height, and a
+  // stroke exactly `strokeSq` squares wide. Both are whole numbers, which is
+  // what puts every stroke edge on a grid line.
+  capSq: 8,
+  strokeSq: 1,
   depth: 0.42,      // total extrusion along z
   lightZ: 2.6,
   intensity: 1.15,
   softness: 12,     // shadow blur radius, px
-  grid: false,      // squared-paper guides in the plane of the letter fronts
-  gridDiv: 4,       // squares per cap height
+  grid: true,       // squared-paper guides in the plane of the letter fronts
   flat: false,      // head-on, near-orthographic: what you'd copy from
   yaw: -0.30,
   pitch: 0.22,
@@ -45,34 +48,47 @@ function rebuild() {
   draw();
 }
 
+/**
+ * Lay the word out in grid squares, then scale into world units where the cap
+ * height is 1 and a square is 1/capSq. Glyph origins land on whole squares and
+ * the baseline is y = 0, so every edge the font puts on a line stays on a line
+ * right across the text.
+ */
 function buildGeometry() {
-  const chars = [...S.text.toUpperCase()];
+  const capSq = S.capSq;
+  const strokeSq = strokeLimit(capSq, S.strokeSq);
+  const cell = 1 / capSq;
+
   const glyphs = [];
-  let total = 0;
-  const track = 0.10;
-  for (const ch of chars) {
-    const g = glyphChains(ch);
+  let totalSq = 0;
+  for (const ch of [...S.text.toUpperCase()]) {
+    const g = glyphChains(ch, capSq, strokeSq);
     if (!g) continue;
     glyphs.push(g);
-    total += g.adv + track;
+    totalSq += g.adv;
   }
-  total = Math.max(total - track, 0.4);
+  totalSq = Math.max(totalSq - 1, 1);          // trailing tracking isn't ink
 
-  const hw = S.bold / 2;         // half stroke width
-  const hd = S.depth / 2;        // half depth
+  const hw = (strokeSq * cell) / 2;
+  const hd = S.depth / 2;
   const boxes = [];
-  let x = -total / 2;
+  let xSq = -Math.round(totalSq / 2);          // whole squares: keeps the phase
   for (const g of glyphs) {
     for (const ch of g.chains) {
-      const moved = ch.pts.map((p) => [p[0] + x, p[1]]);
+      const moved = ch.pts.map((p) => [(p[0] + xSq) * cell, p[1] * cell]);
       extrudeChain(moved, ch.closed, hw, hd, boxes);
     }
-    x += g.adv + track;
+    xSq += g.adv;
   }
 
   const faces = [];
   for (const b of boxes) for (const f of b.faces) faces.push(f);
-  geom = { faces, boxes, width: total + S.bold };
+  geom = { faces, boxes, width: totalSq * cell };
+}
+
+/** A stroke has to leave room for counters: at most half the cap height. */
+function strokeLimit(capSq, n) {
+  return clamp(Math.round(n), 1, Math.max(1, Math.floor(capSq / 2)));
 }
 
 /**
@@ -82,8 +98,14 @@ function buildGeometry() {
  */
 function extrudeChain(pts, closed, hw, hd, out) {
   let p = pts.filter((q, i) => i === 0 || Math.hypot(q[0] - pts[i - 1][0], q[1] - pts[i - 1][1]) > 1e-7);
-  if (p.length === 1) p = [p[0], [p[0][0] + 1e-4, p[0][1]]];   // dot -> tiny stub
-  if (p.length < 2) return;
+  if (p.length < 1) return;
+  if (p.length === 1) {
+    // a dot: build the square outright rather than extruding a stub, so its
+    // corners land exactly on grid intersections
+    const [x, y] = p[0];
+    out.push(makePrism([[x - hw, y - hw], [x + hw, y - hw], [x + hw, y + hw], [x - hw, y + hw]], hd));
+    return;
+  }
 
   if (!closed) {
     const d0 = unit(p[0], p[1]), dn = unit(p[p.length - 2], p[p.length - 1]);
@@ -385,7 +407,7 @@ function drawShadow() {
 /**
  * Squared-paper guides drawn in the plane of the letter *fronts*, so the grid
  * carries the same perspective as the type and the faces sit exactly on it.
- * Ruled in cap-height units: `gridDiv` squares per cap height, with the
+ * Ruled in cap-height units: `capSq` squares per cap height, with the
  * baseline and cap line picked out, so the drawing can be copied square for
  * square onto a real checked page.
  */
@@ -408,7 +430,7 @@ function drawGrid() {
   y0 = clamp(y0, -SPAN, SPAN); y1 = clamp(y1, -SPAN, SPAN);
   if (x1 - x0 < 1e-3 || y1 - y0 < 1e-3) return;
 
-  let cell = 1 / S.gridDiv;
+  let cell = 1 / S.capSq;
   while ((x1 - x0 + y1 - y0) / cell > 900) cell *= 2;   // never flood the canvas
 
   const line = (ax, ay, bx, by, style, width) => {
@@ -626,8 +648,14 @@ makeKnob(knobRow, {
   onChange: (v) => { S.depth = v; rebuild(); },
 });
 makeKnob(knobRow, {
-  label: 'Boldness', min: 0.03, max: 0.26, value: S.bold,
-  onChange: (v) => { S.bold = v; rebuild(); },
+  label: 'Stroke', min: 1, max: 6, value: S.strokeSq, step: 1,
+  format: (v) => `${strokeLimit(S.capSq, v)} sq`,
+  onChange: (v) => { S.strokeSq = v; rebuild(); },
+});
+makeKnob(knobRow, {
+  label: 'Cap height', min: 4, max: 14, value: S.capSq, step: 1,
+  format: (v) => `${v} sq`,
+  onChange: (v) => { S.capSq = v; rebuild(); },
 });
 makeKnob(knobRow, {
   label: 'Light dist', min: -2.5, max: 7, value: S.lightZ,
@@ -644,12 +672,6 @@ makeKnob(knobRow, {
   format: (v) => v.toFixed(0),
   onChange: (v) => { S.softness = v; draw(); },
 });
-makeKnob(knobRow, {
-  label: 'Squares', min: 1, max: 10, value: S.gridDiv, step: 1,
-  format: (v) => `${v} / cap`,
-  onChange: (v) => { S.gridDiv = v; if (S.grid) draw(); },
-});
-
 const gridBox = document.getElementById('grid');
 gridBox.checked = S.grid;
 gridBox.addEventListener('change', () => { S.grid = gridBox.checked; draw(); });

@@ -20,15 +20,15 @@ No libraries, no font files, no WebGL — one 2D canvas and about 600 lines of J
 | --- | --- |
 | **Text** field | Up to 24 characters, A–Z, 0–9 and `. , ! ? - + : ' / * #` (lowercase is upper-cased) |
 | **Depth** knob | Extrusion along z, from flat to 1.4 cap-heights |
-| **Boldness** knob | Stroke width, 0.03 → 0.26 cap-heights |
+| **Stroke** knob | Stroke width in whole squares, 1–6 (capped at half the cap height) |
+| **Cap height** knob | Squares per cap height, 4–14 — this *is* the design grid, so it redraws the letters |
 | **Light dist** knob | Dollies the lamp toward or away from the viewer, keeping it visually in place |
 | **Intensity** knob | Brightness of the point light, and how dark the shadow reads |
 | **Softness** knob | Shadow blur |
 | **Drag the sun** | Moves the light in the plane at its current distance |
 | **Drag elsewhere** | Orbits the camera (yaw and pitch) |
 | **Material swatches** | Base colour |
-| **Grid** checkbox | Squared-paper guides in the plane of the letter fronts |
-| **Squares** knob | Grid squares per cap height, 1–10 |
+| **Grid** checkbox | Show the squared-paper guides (on by default) |
 | **Front on** | Squares up head-on and switches to a near-orthographic projection |
 
 Knobs respond to vertical drags, the scroll wheel, and double-click to reset.
@@ -36,13 +36,35 @@ Hold shift while dragging for fine control.
 
 ## How it works
 
-**The font** (`font.js`). Each glyph is a list of strokes in a coordinate system
-where the baseline is `y = 0` and the cap height is `y = 1`: `['L', x1,y1,x2,y2]`
-for a straight segment, `['A', cx,cy,rx,ry,deg0,deg1]` for an elliptical arc.
-`glyphChains()` flattens the glyph into polyline *chains*, keeping each arc as a
-single chain (closed for a full ellipse) so the extruder can miter its joints.
+**The font** (`font.js`) is generated from the grid, not drawn on top of it.
+Every glyph is a builder function of two integers: `H` squares per cap height and
+`N` squares of stroke width. Strokes are described by their *centre* lines and
+the extruder gives each one a half-width of `N/2` with square caps — so a centre
+line at `x = N/2` produces a stroke spanning exactly `[0, N]`, both edges on grid
+lines, `N` squares apart. That single fact gives the metrics every glyph is built
+from:
 
-**Extrusion** (`extrudeChain` in `app.js`). Boldness is the stroke width, so a
+- `x0 = N/2`, `x1 = W - N/2` — stems whose outer edges are the glyph's 0 and W
+- `y0 = N/2`, `y1 = H - N/2` — bars sitting exactly on the baseline and cap line
+- `mid = ceil((H-N)/2) + N/2` — a middle bar with both edges on lines
+- `sc(c) = round(c - N/2) + N/2` — snaps any other centre line so its two edges
+  land on lines (T's stem, Y's stem, M's and W's vertices, 1, 4 …)
+
+So the E's stem sits on the lines at 0 and N, its inner edge on the next line up;
+its top bar's upper edge *is* the cap line and its bottom bar's lower edge *is*
+the baseline. Glyph width is `round(H × ratio)` squares, advance is `W + 1`, and
+the word is laid out from a whole-square offset so the phase holds across the
+whole line.
+
+Diagonals and curves can't have their long edges on lines — no straight diagonal
+does, and no ellipse does. They're pinned the way you'd pin them on paper
+instead: end points on lattice points, and every bowl's extremes touching the
+glyph's bounding lines.
+
+Glyphs are emitted as polyline *chains*, each arc kept as one chain (closed for a
+full ellipse) so the extruder can miter its joints.
+
+**Extrusion** (`extrudeChain` in `app.js`). A
 chain is offset by ±half-width at every vertex along the angle bisector, scaled
 by `1/cos(half-angle)` and clamped to 3× the half-width so a hairpin can't spike
 off into space. Open chains get square caps by pushing their endpoints out by
@@ -113,6 +135,16 @@ rescales.
 - `notes.md` — working notes, including the bugs hit along the way
 - `preview.png`, `preview-deep.png`, `preview-grid.png` — screenshots
 
+## Checking the alignment
+
+Alignment is verified rather than eyeballed: a headless check builds the
+axis-aligned glyphs (`EFHILT.:-+`) at cap heights 4/6/8/11/14 crossed with
+strokes of 1/2/3/5 squares, and asserts every prism vertex lands on a grid
+intersection. Worst error across all 20 combinations is 3.6e-15 squares — float
+noise. (The first run found 12 vertices off by 1e-4: `extrudeChain` used to turn
+a zero-length chain into a stub by nudging the endpoint, which is how the dots in
+`.` and `:` were built. They now build their square directly.)
+
 ## Known limitations
 
 - Painter's algorithm, not a z-buffer, so pathological self-intersections
@@ -120,5 +152,7 @@ rescales.
   that it holds up.
 - Letters don't shadow *each other* — the shadow is cast onto the floor only.
 - The font is caps-only; unmapped characters are skipped.
-- Stroke width isn't snapped to the grid, so boldness generally lands between
-  squares. Set it by eye against the guides if you want a whole number.
+- Only straight strokes can sit on the lines. Diagonals and curves are pinned at
+  their end points and extremes — that's the best any grid drawing can do.
+- Very large strokes on a small cap height run out of room for counters, so the
+  stroke is capped at half the cap height.
