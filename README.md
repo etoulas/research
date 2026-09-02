@@ -183,7 +183,20 @@ for dirname, _ in subdirs_with_dates:
             readme_path.write_text('\n'.join(new_lines))
 
 ]]]-->
-## 1 research projects
+## 2 research projects
+
+### [Which open-weights LLM actually runs well on a 4060 Ti 16 GB?](https://github.com/etoulas/research/tree/main/llm-4060ti-16gb#readme) (2026-09-02 11:46)
+
+An architecture-first modelling exercise evaluated seven 27–35B open-weights LLMs on a single fixed rig (RTX 4060 Ti 16 GB, 48 GB DDR4-3200, i5-6600K) to find which can hit ≥32k context at >10 tok/s under Q4/IQ4 quantisation. Rather than benchmarking — the research environment had no GPU and blocked Hugging Face — it builds a per-architecture VRAM and decode-loop model, validated against two published KV-cache figures to within 2%, and ships it as both a Python tool and an [interactive planner](https://etoulas.github.io/research/llm-4060ti-16gb/planner.html) plus a `bench.sh` calibration script to fold real measurements back in. The headline conclusion is that MoE models with selective expert offload (`--n-cpu-moe` in [llama.cpp](https://github.com/ggml-org/llama.cpp)) dominate: Qwen3.6-35B-A3B-MTP at IQ4_XS is predicted at ~39 tok/s at 32k, while all three dense candidates fall to 1.5–9 tok/s.
+
+Key findings:
+
+- The CPU offload path on Skylake AVX2 is core-bound (~2.2 GB/s per core, ~8.8 GB/s total), not RAM-bound — so faster memory buys nothing, and every offloaded byte costs ~26× GPU time.
+- Minimising offload beats picking a "better" quant: GLM-4.7-Flash goes 20.9 → 35.6 tok/s simply by choosing IQ4_XS over UD-Q4_K_XL.
+- None of the seven is a plain transformer (GatedDeltaNet, Mamba-2, MLA, sliding-window hybrids), so generic VRAM calculators mis-size all of them; long context turns out to be cheap and weights are the binding constraint.
+- vLLM is the wrong engine here because nothing fits in 15 GiB and it has no selective expert offload; revisit at 24 GB.
+- Freeing ~500 MB of VRAM (headless / iGPU desktop) takes dense Muse-Glimmer-30B from 9.0 to 14.5 tok/s — more valuable than any flag.
+- Caveats flagged: Nemotron's quoted 25.48 GB "Q4_K_M" is 6.79 bits/param and likely mislabelled; GLM-4.7-Flash's attention type (MLA vs MHA) is ambiguous and changes its verdict; absolute tok/s carries ±30% until calibrated, though the ranking is stable across all parameter sweeps.
 
 ### [3D Stroke Type](https://github.com/etoulas/research/tree/main/3d-text-lighting#readme) (2026-08-30 19:25)
 

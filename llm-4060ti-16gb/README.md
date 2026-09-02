@@ -1,5 +1,10 @@
 # Which open-weights LLM actually runs well on a 4060 Ti 16 GB?
 
+<!-- AI-GENERATED-NOTE -->
+> [!NOTE]
+> This is an AI-generated research report. All text and code in this report was created by an LLM (Large Language Model). For more information on how these reports are created, see the [main research repository](https://github.com/etoulas/research).
+<!-- /AI-GENERATED-NOTE -->
+
 An architecture-first analysis of seven 27–35B models on one specific machine:
 **RTX 4060 Ti 16 GB + 48 GB DDR4-3200 + i5-6600K**, targeting Q4/IQ4, ≥32k context and
 >10 tok/s generation.
