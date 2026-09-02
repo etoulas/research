@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4060 Ti 16 GB LLM Planner</title>
+<style>
+  :root{
+    --bg:#fbfaf8; --panel:#fff; --ink:#1a1a1a; --muted:#6b6b6b; --line:#e2e0dc;
+    --accent:#3d5a80; --gpu:#3d5a80; --kv:#7fa3c4; --buf:#c9d6e2; --cpu:#c0603a;
+    --good:#2f7a4f; --warn:#b8860b; --bad:#b03a2e; --free:#eeece8;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#16181b; --panel:#1e2126; --ink:#e8e6e3; --muted:#9aa0a6; --line:#31353b;
+    --accent:#7fa3c4; --gpu:#5b84ad; --kv:#8fb4d4; --buf:#3a454f; --cpu:#d2775a;
+    --good:#5cb87f; --warn:#d4a640; --bad:#e0705f; --free:#282c31;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#16181b; --panel:#1e2126; --ink:#e8e6e3; --muted:#9aa0a6; --line:#31353b;
+    --accent:#7fa3c4; --gpu:#5b84ad; --kv:#8fb4d4; --buf:#3a454f; --cpu:#d2775a;
+    --good:#5cb87f; --warn:#d4a640; --bad:#e0705f; --free:#282c31;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 64px}
+  h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:.92rem}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+  h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+     margin:0 0 14px;font-weight:600}
+  .models{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:8px}
+  .mbtn{background:transparent;border:1px solid var(--line);border-radius:8px;padding:9px 10px;
+        cursor:pointer;text-align:left;color:var(--ink);font:inherit;font-size:.85rem;line-height:1.3}
+  .mbtn:hover{border-color:var(--accent)}
+  .mbtn[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);
+        box-shadow:inset 0 0 0 1px var(--accent)}
+  .mbtn small{display:block;color:var(--muted);font-size:.74rem;margin-top:2px}
+  .ctrls{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px 22px}
+  label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px}
+  label b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+         background:var(--panel);color:var(--ink);font:inherit;font-size:.88rem}
+  .row{display:flex;gap:8px;align-items:center;font-size:.85rem}
+  .headline{display:flex;flex-wrap:wrap;gap:26px;align-items:baseline;margin-bottom:16px}
+  .big{font-size:2.6rem;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+  .big .unit{font-size:.95rem;font-weight:400;color:var(--muted);margin-left:7px}
+  .verdict{font-size:.85rem;padding:3px 10px;border-radius:99px;font-weight:600}
+  .v-good{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+  .v-warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+  .v-bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+  .bar{display:flex;height:34px;border-radius:6px;overflow:hidden;border:1px solid var(--line);margin:6px 0}
+  .bar div{display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;
+           overflow:hidden;white-space:nowrap;min-width:0}
+  .seg-free{background:var(--free);color:var(--muted)!important}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.76rem;color:var(--muted);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em}
+  td.num{font-variant-numeric:tabular-nums}
+  tr.sel{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+  pre{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:12px;
+      overflow-x:auto;font-size:.79rem;line-height:1.5;margin:0}
+  .note{font-size:.8rem;color:var(--muted);margin-top:10px}
+  .flag{border-left:3px solid var(--warn);padding:8px 12px;margin-top:12px;font-size:.82rem;
+        background:color-mix(in srgb,var(--warn) 8%,transparent);border-radius:0 6px 6px 0}
+  .scroll{overflow-x:auto}
+  code{font-size:.85em;background:var(--free);padding:1px 4px;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Which LLM actually runs on a 4060 Ti 16 GB?</h1>
+  <p class="sub">RTX 4060 Ti 16 GB (288 GB/s) + 48 GB DDR4-3200 + i5-6600K (4 cores), under llama.cpp.
+     Modelled, not measured — see the report for method and error bars.</p>
+
+  <div class="panel">
+    <h2>Model</h2>
+    <div class="models" id="models"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Configuration</h2>
+    <div class="ctrls">
+      <div><label>Context <b id="lctx"></b></label><input type="range" id="ctx" min="0" max="8" step="1" value="3"></div>
+      <div><label>Quantisation</label><select id="quant"></select></div>
+      <div><label>KV cache type</label><select id="kv">
+        <option value="f16">f16 (no loss)</option>
+        <option value="q8_0" selected>q8_0 (recommended)</option>
+        <option value="q5_1">q5_1</option>
+        <option value="q4_0">q4_0 (lossy)</option></select></div>
+      <div><label>Usable VRAM <b id="lvram"></b></label><input type="range" id="vram" min="13.5" max="15.9" step="0.1" value="15.0"></div>
+      <div><label>CPU throughput <b id="lcpu"></b> per core</label><input type="range" id="cpu" min="1.0" max="7.0" step="0.1" value="2.2"></div>
+      <div><label>Expert offload <b id="loff"></b></label><input type="range" id="off" min="0" max="100" step="1" value="0">
+        <div class="row"><input type="checkbox" id="auto" checked><label for="auto" style="margin:0">auto (least offload that fits)</label></div></div>
+    </div>
+    <div class="row" style="margin-top:14px;gap:18px;flex-wrap:wrap">
+      <span><input type="checkbox" id="mtp"><label for="mtp" style="display:inline;margin:0">assume MTP self-speculation works (×1.6)</label></span>
+      <span><input type="checkbox" id="pess"><label for="pess" style="display:inline;margin:0">GLM: pessimistic MHA reading of attention</label></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="headline">
+      <div><div class="big"><span id="tps">–</span><span class="unit">tok/s generated</span></div></div>
+      <div id="verdict"></div>
+    </div>
+    <div class="bar" id="bar"></div>
+    <div class="legend">
+      <span><i style="background:var(--gpu)"></i>weights in VRAM</span>
+      <span><i style="background:var(--kv)"></i>KV cache</span>
+      <span><i style="background:var(--buf)"></i>compute + CUDA ctx</span>
+      <span><i style="background:var(--free)"></i>free</span>
+      <span><i style="background:var(--cpu)"></i>weights in system RAM (off-chart)</span>
+    </div>
+    <div class="scroll"><table id="breakdown"></table></div>
+    <div id="flags"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Command line</h2>
+    <pre id="cmd"></pre>
+    <p class="note">Run <code>bench.sh</code> from the repo folder to check these predictions against your
+       actual machine, then <code>python3 vram_model.py --calibrate bench.csv</code>.</p>
+  </div>
+
+  <div class="panel">
+    <h2>All seven at this context</h2>
+    <div class="scroll"><table id="compare"></table></div>
+    <p class="note">Each model shown with its own best Q4-class quant at the current context and settings.</p>
+  </div>
+</div>
+
+<script src="planner.js"></script>
+<script>
+const CTXS=[4096,8192,16384,32768,49152,65536,98304,131072,262144];
+const fmtG=b=>(b/GIB).toFixed(2)+" GiB";
+const $=id=>document.getElementById(id);
+let cfg=null, cur=null;
+
+// planner.js is loaded as a plain script, so its functions are globals here.
+const Mdl={kvBytes,weightSplit,evaluate,bestConfig,pickQuant,q4ish};
+
+fetch("models.json").then(r=>r.json()).then(d=>{
+  cfg=d; cur=d.models.find(m=>m.id==="glm47-flash")||d.models[0]; init();
+}).catch(()=>{
+  document.querySelector(".wrap").insertAdjacentHTML("afterbegin",
+    `<div class="flag" style="margin-bottom:18px"><b>models.json could not be loaded.</b>
+     Browsers block <code>fetch</code> from <code>file://</code>. Open the published page, or
+     serve this folder locally: <code>python3 -m http.server -d . 8000</code> then visit
+     <code>http://localhost:8000/planner.html</code>.</div>`);
+});
+
+function init(){
+  $("models").innerHTML=cfg.models.map(m=>
+    `<button class="mbtn" data-id="${m.id}" aria-pressed="${m.id===cur.id}">${m.name}
+      <small>${m.kind==="moe"?`MoE ${(m.params_total/1e9).toFixed(0)}B-A${(m.params_active/1e9).toFixed(0)}B`
+        :`dense ${(m.params_total/1e9).toFixed(0)}B`} · ${m.n_layers} layers</small></button>`).join("");
+  $("models").onclick=e=>{const b=e.target.closest(".mbtn"); if(!b)return;
+    cur=cfg.models.find(m=>m.id===b.dataset.id); syncQuants(); render();};
+  ["ctx","quant","kv","vram","cpu","off","auto","mtp","pess"].forEach(id=>
+    $(id).addEventListener("input",()=>{if(id!=="off")syncQuants(); render();}));
+  syncQuants(); render();
+}
+
+function settings(){
+  return {
+    ctx:CTXS[+$("ctx").value], kv:$("kv").value,
+    ov:{vram_usable_bytes:parseFloat($("vram").value)*GIB,
+        cpu_bytes_per_s_per_thread:parseFloat($("cpu").value)*1e9},
+    spec:($("mtp").checked&&cur.mtp)?cfg.defaults.mtp_speedup:1.0,
+    pess:$("pess").checked,
+  };
+}
+
+function syncQuants(){
+  const s=settings(), qs=Mdl.q4ish(cur), best=Mdl.pickQuant(cfg,cur,s.ctx,s.kv,s.spec,s.pess,s.ov);
+  const keep=qs.includes($("quant").value)?$("quant").value:best;
+  $("quant").innerHTML=qs.map(q=>`<option value="${q}" ${q===keep?"selected":""}>${q} — ${
+    (cur.quants[q].bytes/1e9).toFixed(1)} GB${q===best?"  ★ best here":""}${
+    cur.quants[q].confidence==="estimated"?"  (size estimated)":""}</option>`).join("");
+}
+
+function render(){
+  const s=settings(), q=$("quant").value;
+  $("lctx").textContent=(s.ctx>=1024?(s.ctx/1024)+"k":s.ctx)+" tokens";
+  $("lvram").textContent=parseFloat($("vram").value).toFixed(1)+" GiB";
+  $("lcpu").textContent=parseFloat($("cpu").value).toFixed(1)+" GB/s";
+
+  let r, auto=$("auto").checked;
+  if(auto){
+    r=Mdl.bestConfig(cfg,cur,q,s.ctx,s.kv,s.spec,s.pess,s.ov);
+    $("off").value=r?Math.round(r.cpuMoeFrac*100):100;
+  }else{
+    r=Mdl.evaluate(cfg,cur,q,s.ctx,s.kv,+$("off").value/100,s.spec,s.pess,s.ov);
+  }
+  $("loff").textContent=$("off").value+"% of "+(cur.kind==="moe"?"expert weights":"all weights");
+
+  if(!r){
+    $("tps").textContent="—";
+    $("verdict").innerHTML='<span class="verdict v-bad">does not fit at any offload level</span>';
+    $("bar").innerHTML=""; $("breakdown").innerHTML=""; $("cmd").textContent="—";
+    renderCompare(s); return;
+  }
+
+  $("tps").textContent=r.tps.toFixed(1);
+  const v = !r.fits ? ["v-bad","exceeds VRAM — will OOM"]
+          : r.tps>=20 ? ["v-good","comfortable"]
+          : r.tps>=10 ? ["v-good","clears the 10 tok/s target"]
+          : ["v-warn","below the 10 tok/s target"];
+  $("verdict").innerHTML=`<span class="verdict ${v[0]}">${v[1]}</span>`;
+
+  const budget=s.ov.vram_usable_bytes;
+  const segs=[["weights",r.weightsGpu,"var(--gpu)"],["KV",r.kv,"var(--kv)"],
+              ["buffers",r.compute,"var(--buf)"],["free",Math.max(0,budget-r.vramUsed),null]];
+  $("bar").innerHTML=segs.map(([n,b,c])=>{
+    const pct=Math.max(0,b)/budget*100; if(pct<=0)return"";
+    return `<div class="${c?"":"seg-free"}" style="width:${pct}%;${c?`background:${c}`:""}"
+      title="${n}: ${fmtG(b)}">${pct>11?fmtG(b):""}</div>`;}).join("");
+
+  $("breakdown").innerHTML=`
+    <tr><th>where the VRAM goes</th><th></th><th>time per token</th><th></th></tr>
+    <tr><td>weights on GPU</td><td class="num">${fmtG(r.weightsGpu)}</td>
+        <td>GPU weight reads</td><td class="num">${r.tGpuMs.toFixed(1)} ms</td></tr>
+    <tr><td>KV cache (${s.kv})</td><td class="num">${fmtG(r.kv)}</td>
+        <td>RAM weight reads</td><td class="num">${r.tCpuMs.toFixed(1)} ms</td></tr>
+    <tr><td>compute + CUDA context</td><td class="num">${fmtG(r.compute)}</td>
+        <td>KV cache reads</td><td class="num">${r.tKvMs.toFixed(1)} ms</td></tr>
+    <tr><td><b>VRAM total</b></td><td class="num"><b>${fmtG(r.vramUsed)}</b> / ${fmtG(budget)}</td>
+        <td>fixed overhead</td><td class="num">${r.tOvhMs.toFixed(1)} ms</td></tr>
+    <tr><td>weights in system RAM</td><td class="num">${fmtG(r.weightsCpu)}</td>
+        <td><b>total</b></td><td class="num"><b>${(1000*s.spec/r.tps).toFixed(1)} ms</b></td></tr>`;
+
+  const flags=[];
+  if(r.dense&&r.cpuMoeFrac>0) flags.push(
+    `<b>Dense model with offload.</b> Every offloaded byte is re-read on <i>every</i> token,
+     not just the ${cur.kind==="moe"?"":""}routed experts. This is why ${r.cpuMoeFrac*100<5?"even a few percent":"this"}
+     offload costs so much here.`);
+  if(r.tCpuMs>r.tGpuMs*2&&r.weightsCpu>0) flags.push(
+    `<b>CPU-bound.</b> ${(r.tCpuMs/(r.tGpuMs+r.tCpuMs+r.tKvMs+r.tOvhMs)*100).toFixed(0)}% of each
+     token is spent waiting on the 4 CPU cores. Cutting the offload fraction is worth more than
+     any other change — try a smaller quant or a smaller KV type.`);
+  if(cur.id==="glm47-flash") flags.push(
+    `<b>GLM-4.7-Flash KV is unresolved.</b> Sources describe both MLA and plain 20-head MHA;
+     the two differ ~9× in cache size. Toggle the pessimistic box to see the downside, and run
+     <code>bench.sh</code> to settle it from llama.cpp's <code>KV self size</code> line.`);
+  if(cur.quants[q].warn) flags.push(`<b>${q}:</b> ${cur.quants[q].warn}`);
+  if(s.spec>1) flags.push(
+    `<b>MTP assumed working.</b> A GGUF containing MTP tensors does not mean llama.cpp implements
+     self-speculation for this architecture. Verify before relying on this number.`);
+  $("flags").innerHTML=flags.map(f=>`<div class="flag">${f}</div>`).join("");
+
+  const nc=Math.round(r.cpuMoeFrac*(cur.n_moe_layers??cur.n_layers));
+  $("cmd").textContent=
+`llama-server -m ${cur.repo.split("/").pop().replace("-GGUF","")}-${q}.gguf \\
+  -c ${s.ctx} -ngl 999 ${nc>0?`-ncmoe ${nc} `:""}\\
+  -fa on -ctk ${s.kv} -ctv ${s.kv} \\
+  -t 4 -b 2048 -ub 512 \\
+  --cache-reuse 256 --no-mmap${cur.multimodal?" \\\n  # add --mmproj for vision; costs extra VRAM":""}`;
+
+  renderCompare(s);
+}
+
+function renderCompare(s){
+  const rows=cfg.models.map(m=>{
+    const spec=($("mtp").checked&&m.mtp)?cfg.defaults.mtp_speedup:1.0;
+    const pess=$("pess").checked&&m.id==="glm47-flash";
+    const q=Mdl.pickQuant(cfg,m,s.ctx,s.kv,spec,pess,s.ov);
+    const r=Mdl.bestConfig(cfg,m,q,s.ctx,s.kv,spec,pess,s.ov);
+    return {m,q,r};
+  }).sort((a,b)=>(b.r?b.r.tps:-1)-(a.r?a.r.tps:-1));
+  $("compare").innerHTML=`<tr><th>model</th><th>quant</th><th>tok/s</th><th>offload</th>
+    <th>VRAM</th><th>in RAM</th></tr>`+rows.map(({m,q,r})=>
+    `<tr class="${m.id===cur.id?"sel":""}"><td>${m.name}</td><td>${q}</td>
+      <td class="num">${r?r.tps.toFixed(1):"—"}</td>
+      <td class="num">${r?(r.cpuMoeFrac*100).toFixed(0)+"%":"—"}</td>
+      <td class="num">${r?fmtG(r.vramUsed):"—"}</td>
+      <td class="num">${r?fmtG(r.weightsCpu):"—"}</td></tr>`).join("");
+}
+</script>
+</body>
+</html>
