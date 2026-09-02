@@ -1,0 +1,291 @@
+{
+  "_about": {
+    "purpose": "Architecture facts for the seven candidate models, used by vram_model.py and planner.html.",
+    "confidence": {
+      "sourced": "stated explicitly by at least one retrieved source (see 'src')",
+      "derived": "computed from sourced numbers by an identity stated in notes.md",
+      "estimated": "reasoned from the model class; correct to roughly +/-20%",
+      "unverified": "single weak source or internally contradictory; do not trust without measuring"
+    },
+    "note": "huggingface.co was blocked by this session's egress policy, so no config.json or GGUF header could be read directly. Every number below is traceable to 'src' or flagged.",
+    "expert_split_identity": "For MoE: expert_total = (P_total - P_active) / (1 - k/n_experts); non_expert = P_total - expert_total. This is exact given P_total, P_active, k, n, so the per-token byte counts are right even where the physical tensor split differs."
+  },
+
+  "hardware": {
+    "gpu": {
+      "name": "NVIDIA RTX 4060 Ti 16 GB (AD106)",
+      "vram_bytes": 17179869184,
+      "vram_usable_bytes": 16106127360,
+      "usable_note": "~15.0 GiB assumed free for llama.cpp; a desktop compositor takes 0.5-1.0 GiB. Headless/WSL can reclaim most of it.",
+      "bandwidth_bytes_per_s": 288000000000,
+      "bandwidth_note": "128-bit GDDR6 @ 18 Gbps = 288 GB/s",
+      "pcie": "Gen4 x8 card in a Z170 Gen3 x16 slot => Gen3 x8 = 7.88 GB/s effective"
+    },
+    "cpu": {
+      "name": "Intel i5-6600K (Skylake, 4C/4T)",
+      "threads": 4,
+      "isa": "AVX2 + FMA, no AVX-512, no AMX",
+      "ram_bytes": 51539607552,
+      "ram_bandwidth_bytes_per_s": 51200000000,
+      "ram_note": "DDR4-3200 dual channel = 51.2 GB/s theoretical; 4 Skylake cores realistically sustain 55-70% of that"
+    }
+  },
+
+  "defaults": {
+    "eff_gpu": 0.78,
+    "eff_gpu_note": "fraction of theoretical VRAM bandwidth llama.cpp reaches on batch-1 matvec; 0.75-0.85 is typical on Ada",
+    "eff_cpu": 0.55,
+    "eff_cpu_note": "4 Skylake cores cannot saturate dual-channel DDR4-3200; includes Q4 dequant overhead",
+    "cpu_bytes_per_s_per_thread": 2.2e9,
+    "cpu_thread_note": "KEY FINDING: llama.cpp's CPU-side MoE FFN on AVX2 Skylake sustains only ~2.2 GB/s of quantised weights per core (dequantise + GEMV, no AVX-512/AMX). With 4 threads that is ~8.8 GB/s -- far BELOW the 28 GB/s the DDR4-3200 subsystem could deliver. So on this box the CPU offload path is CORE-bound, not RAM-bound. Faster RAM would not help; fewer offloaded bytes would. Calibrate with bench.sh.",
+    "mtp_speedup": 1.6,
+    "mtp_note": "Upside only. A GGUF shipping MTP tensors does not mean llama.cpp implements self-speculation for that architecture -- support is per-architecture and often absent (cf. the LM Studio 'Nemotron MTP not detected' report). Default assumption is 1.0x; verify with bench.sh before counting on it.",
+    "overhead_s_per_token_gpu_only": 0.0006,
+    "overhead_s_per_token_hybrid": 0.0018,
+    "overhead_note": "kernel launch + per-layer CPU<->GPU sync. Hybrid figure from typical -ncmoe behaviour; calibratable.",
+    "compute_buffer_bytes": 700000000,
+    "cuda_ctx_bytes": 400000000
+  },
+
+  "models": [
+    {
+      "id": "qwen38-27b",
+      "name": "Qwen3.8-27B",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "kind": "dense",
+      "multimodal": true,
+      "params_total": 27.0e9,
+      "params_active": 27.0e9,
+      "n_layers": 64,
+      "hidden": 5120,
+      "ffn": 17408,
+      "ctx_native": 262144,
+      "mtp": true,
+      "layer_groups": [
+        {"type": "linear_state", "count": 48, "state_bytes_per_layer": 786432,
+         "note": "GatedDeltaNet: 48 V heads / 16 QK heads, head_dim 128. Recurrent state, constant in ctx.",
+         "confidence": "estimated"},
+        {"type": "attention_full", "count": 16, "n_kv_heads": 4, "head_dim": 256,
+         "note": "gated attention, GQA 24/4, head_dim 256 with a 64-dim rotary slice",
+         "confidence": "sourced"}
+      ],
+      "quants": {
+        "IQ4_XS":     {"bytes": 15500000000, "confidence": "sourced"},
+        "Q4_K_M":     {"bytes": 17770000000, "confidence": "sourced"},
+        "UD-Q4_K_XL": {"bytes": 17920000000, "confidence": "sourced"}
+      },
+      "src": [
+        "https://dev.to/jamilxt/qwen-38-27b-vs-qwen-36-27b-same-architecture-4-months-apart-and-a-different-kind-of-upgrade-3280",
+        "https://huggingface.co/bartowski/Qwen3.8-27B-GGUF",
+        "https://ofox.ai/blog/qwen-3-8-27b-run-locally-vram-gguf-2026/"
+      ]
+    },
+
+    {
+      "id": "gemma4-31b",
+      "name": "Gemma-4-31B-it",
+      "repo": "unsloth/gemma-4-31B-it-GGUF",
+      "kind": "dense",
+      "multimodal": true,
+      "params_total": 31.0e9,
+      "params_active": 31.0e9,
+      "n_layers": 60,
+      "ctx_native": 262144,
+      "mtp": false,
+      "layer_groups": [
+        {"type": "attention_swa", "count": 50, "window": 4096, "n_kv_heads": 8, "head_dim": 256,
+         "note": "sliding-window local layers", "confidence": "estimated"},
+        {"type": "attention_full", "count": 10, "n_kv_heads": 8, "head_dim": 256,
+         "note": "global layers. The reported ~74% KV reduction vs an all-global 60-layer model is accounted for by the 50 SWA layers, not by an extra sharing factor - adding both double-counts. n_kv x head_dim = 2048 DERIVED from the reported ~22 GiB at 262k.",
+         "confidence": "derived"}
+      ],
+      "quants": {
+        "Q4_K_M":     {"bytes": 18000000000, "confidence": "sourced"},
+        "UD-Q4_K_XL": {"bytes": 18600000000, "confidence": "estimated"}
+      },
+      "kv_calibration": {"ctx": 262144, "reported_bytes": 23622320128,
+        "src": "https://kaitchup.substack.com/p/gemma-4-31b-and-26b-a4b-architecture (via search summary: '~22GB just for KV cache' at 262K)"},
+      "src": [
+        "https://kaitchup.substack.com/p/gemma-4-31b-and-26b-a4b-architecture",
+        "https://avenchat.com/blog/gemma-4-hardware-requirements"
+      ]
+    },
+
+    {
+      "id": "muse-glimmer-30b",
+      "name": "Muse-Glimmer-30B",
+      "repo": "unsloth/Muse-Glimmer-30B-GGUF",
+      "kind": "dense",
+      "multimodal": true,
+      "params_total": 27.8e9,
+      "params_active": 27.8e9,
+      "params_total_note": "27.8B text backbone; the 1.8B ViT-G/14 ships as a separate mmproj file and is not read during text decode. 29.6B is the headline figure including vision.",
+      "n_layers": 52,
+      "hidden": 6656,
+      "ctx_native": 131072,
+      "mtp": false,
+      "vision_encoder_params": 1.8e9,
+      "layer_groups": [
+        {"type": "attention_swa", "count": 39, "window": 2048, "n_kv_heads": 2, "head_dim": 256,
+         "note": "3 local : 1 global cycle, window 2048", "confidence": "sourced"},
+        {"type": "attention_full", "count": 13, "n_kv_heads": 2, "head_dim": 256,
+         "note": "head_dim 256 DERIVED from the reported 15.9 GB -> 19.3 GB delta over 130k ctx (26 KiB/token)",
+         "confidence": "derived"}
+      ],
+      "quants": {
+        "Q4_K_M":     {"bytes": 15870000000, "confidence": "sourced"},
+        "UD-Q4_K_XL": {"bytes": 16700000000, "confidence": "estimated"},
+        "IQ4_XS":     {"bytes": 14800000000, "confidence": "estimated"}
+      },
+      "kv_calibration": {"ctx": 130000, "reported_bytes": 3650000000,
+        "src": "reported 15.9 GB at low ctx vs 19.3 GB at 130k ctx"},
+      "src": [
+        "https://sebastianraschka.com/blog/2026/muse-glimmer-30b-architecture-notes.html",
+        "https://recipes.vllm.ai/meta-models/Muse-Glimmer-30B",
+        "https://www.canirun.ai/model/muse-glimmer-30b"
+      ]
+    },
+
+    {
+      "id": "nemotron35-lightning",
+      "n_moe_layers": 23,
+      "n_moe_layers_note": "23 of 52 layers are MoE; the 23 Mamba-2 and 6 attention layers have no expert weights, so -ncmoe caps out at 23",
+      "name": "NVIDIA-Nemotron-3.5-Lightning-30B-A3B",
+      "repo": "unsloth/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF",
+      "kind": "moe",
+      "multimodal": false,
+      "params_total": 30.0e9,
+      "params_active": 3.0e9,
+      "n_experts": 128,
+      "n_experts_active": 6,
+      "shared_experts": 1,
+      "n_layers": 52,
+      "ctx_native": 1048576,
+      "mtp": true,
+      "layer_groups": [
+        {"type": "linear_state", "count": 23, "state_bytes_per_layer": 1572864,
+         "note": "Mamba-2 SSM: conv + ssm state, constant in ctx", "confidence": "estimated"},
+        {"type": "attention_full", "count": 6, "n_kv_heads": 8, "head_dim": 128,
+         "note": "only 6 of 52 layers hold a growing KV cache", "confidence": "sourced"}
+      ],
+      "quants": {
+        "Q4_K_M":     {"bytes": 25480000000, "confidence": "unverified",
+                       "warn": "6.8 bits/param - not Q4-shaped. Likely keeps Mamba-2/MTP tensors high-precision, or the source is wrong."},
+        "UD-Q4_K_XL": {"bytes": 18500000000, "confidence": "estimated",
+                       "warn": "estimated at 4.9 bits/param; verify against the real file listing"}
+      },
+      "src": [
+        "https://developer.nvidia.com/blog/nvidia-nemotron-3-5-lightning-delivers-fast-accurate-specialized-task-execution-for-long-running-agents/",
+        "https://www.mindstudio.ai/blog/nvidia-nemotron-3-5-lightning",
+        "https://runaihome.com/blog/nemotron-35-lightning-consumer-gpu-hardware-guide-2026/"
+      ]
+    },
+
+    {
+      "id": "qwen36-35b-a3b",
+      "n_moe_layers": 40,
+      "n_moe_layers_note": "every layer carries the 256-expert MoE FFN",
+      "name": "Qwen3.6-35B-A3B-MTP",
+      "repo": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF",
+      "kind": "moe",
+      "multimodal": false,
+      "params_total": 35.0e9,
+      "params_active": 3.0e9,
+      "n_experts": 256,
+      "n_experts_active": 8,
+      "shared_experts": 1,
+      "n_layers": 40,
+      "ctx_native": 262144,
+      "mtp": true,
+      "layer_groups": [
+        {"type": "linear_state", "count": 30, "state_bytes_per_layer": 786432,
+         "note": "GatedDeltaNet, constant state", "confidence": "estimated"},
+        {"type": "attention_full", "count": 10, "n_kv_heads": 4, "head_dim": 128,
+         "note": "1 gated-attention layer per 4-layer block; head config estimated",
+         "confidence": "estimated"}
+      ],
+      "quants": {
+        "UD-Q4_K_XL": {"bytes": 22400000000, "confidence": "sourced"},
+        "UD-Q4_K_M":  {"bytes": 21500000000, "confidence": "estimated"},
+        "IQ4_XS":     {"bytes": 19000000000, "confidence": "estimated"}
+      },
+      "src": [
+        "https://huggingface.co/blog/EXDai/qwen36-35b-a3b-architecture-overview",
+        "https://allthings.how/qwen3-6-35b-a3b-gguf-quants-sizes-and-how-to-run-it/"
+      ]
+    },
+
+    {
+      "id": "laguna-xs-21",
+      "n_moe_layers": 40,
+      "n_moe_layers_note": "every layer carries the MoE FFN",
+      "name": "Laguna-XS-2.1",
+      "repo": "poolside/Laguna-XS-2.1-GGUF",
+      "kind": "moe",
+      "multimodal": false,
+      "params_total": 33.45e9,
+      "params_active": 3.0e9,
+      "n_experts": 64,
+      "n_experts_active": 8,
+      "shared_experts": 0,
+      "n_layers": 40,
+      "ctx_native": 262144,
+      "mtp": false,
+      "layer_groups": [
+        {"type": "attention_swa", "count": 30, "window": 512, "n_kv_heads": 4, "head_dim": 128,
+         "note": "window 512 - the SWA part of the cache is effectively free", "confidence": "sourced"},
+        {"type": "attention_full", "count": 10, "n_kv_heads": 4, "head_dim": 128,
+         "note": "global layers with per-layer rotary scaling; head config estimated",
+         "confidence": "estimated"}
+      ],
+      "quants": {
+        "Q4_K_M": {"bytes": 20300000000, "confidence": "sourced"}
+      },
+      "notes_extra": "BF16 = 66.9 GB, consistent with 33.45B params. Official GGUF from poolside; Q4_K_M is their recommended default. Native FP8 KV cache in the reference implementation.",
+      "src": [
+        "https://poolside.ai/blog/introducing-laguna-xs-2-1",
+        "https://recipes.vllm.ai/poolside/Laguna-XS-2.1",
+        "https://www.aimadetools.com/blog/poolside-laguna-xs-2-1-complete-guide/"
+      ]
+    },
+
+    {
+      "id": "glm47-flash",
+      "n_moe_layers": 46,
+      "n_moe_layers_note": "first layer is typically a dense FFN in GLM MoE models; 46 MoE layers assumed",
+      "name": "GLM-4.7-Flash",
+      "repo": "unsloth/GLM-4.7-Flash-GGUF",
+      "kind": "moe",
+      "multimodal": false,
+      "params_total": 30.0e9,
+      "params_active": 3.0e9,
+      "n_experts": 64,
+      "n_experts_active": 4,
+      "shared_experts": 1,
+      "n_layers": 47,
+      "ctx_native": 131072,
+      "mtp": true,
+      "layer_groups": [
+        {"type": "attention_mla", "count": 47, "kv_lora_rank": 512, "qk_rope_head_dim": 64,
+         "note": "MLA latent cache: (512+64) elements per layer per token, single cache not K+V",
+         "confidence": "unverified"}
+      ],
+      "layer_groups_alt_mha": [
+        {"type": "attention_full", "count": 47, "n_kv_heads": 20, "head_dim": 128,
+         "note": "PESSIMISTIC alternative: sources also describe 20 heads / 20 KV heads (plain MHA). ~9x the MLA cache.",
+         "confidence": "unverified"}
+      ],
+      "quants": {
+        "Q3_K_M":     {"bytes": 14600000000, "confidence": "sourced"},
+        "Q4_K_M":     {"bytes": 18300000000, "confidence": "sourced"},
+        "IQ4_XS":     {"bytes": 16200000000, "confidence": "estimated"},
+        "UD-Q4_K_XL": {"bytes": 18900000000, "confidence": "estimated"}
+      },
+      "src": [
+        "https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF",
+        "https://www.marktechpost.com/2026/01/20/zhipu-ai-releases-glm-4.7-flash-a-30b-a3b-moe-model-for-efficient-local-coding-and-agents/",
+        "https://grigio.org/glm4-7-flash-the-new-local-llm-king-at-30b-a3b/"
+      ]
+    }
+  ]
+}
