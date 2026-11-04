@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Franchise-Optimierer</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3f0;
+  --surface: #fcfcfb;
+  --border: #dddcd6;
+  --grid: #e8e7e2;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #7a7974;
+  --accent: #2a78d6;
+  --good-bg: #e3f3ea;
+  --good: #11663d;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #353532; --grid: #2a2a28;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88; --accent: #3987e5;
+    --good-bg: #153424; --good: #7fd6a4;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #353532; --grid: #2a2a28;
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88; --accent: #3987e5;
+  --good-bg: #153424; --good: #7fd6a4;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; }
+.lead { color: var(--text-2); margin: 0 0 20px; max-width: 70ch; }
+a { color: var(--accent); }
+.grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; min-width: 0; }
+.hint { color: var(--muted); font-size: 0.85rem; margin: 6px 0 0; }
+label { font-size: 0.9rem; color: var(--text-2); }
+input[type=text], input[type=number] {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 8px; width: 100%; min-width: 0;
+}
+input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+button {
+  font: inherit; font-size: 0.88rem; cursor: pointer; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+}
+button:hover { border-color: var(--accent); }
+.prem-row { display: grid; grid-template-columns: 14px 1fr 120px; gap: 8px; align-items: center; margin-bottom: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; }
+.cost-row { display: grid; grid-template-columns: minmax(0, 1fr) 56px 14px 92px 28px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.cost-row .x { color: var(--muted); text-align: center; }
+.cost-row button { padding: 4px 0; }
+.cost-head { font-size: 0.78rem; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: 1fr 120px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.88rem; color: var(--text-2); margin-top: 4px; }
+.sum { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; font-weight: 600; }
+details summary { cursor: pointer; color: var(--text-2); font-size: 0.9rem; }
+.est { display: grid; grid-template-columns: 1fr 80px; gap: 8px; align-items: center; margin: 10px 0 8px; }
+
+.hero { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+.hero .big { font-size: 2.2rem; font-weight: 700; line-height: 1.1; }
+.hero .lbl { font-size: 0.82rem; color: var(--text-2); }
+.hero .val { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.badge { display: inline-block; background: var(--good-bg); color: var(--good); border-radius: 999px; padding: 1px 9px; font-size: 0.78rem; font-weight: 600; }
+
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 6px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th { font-size: 0.78rem; color: var(--text-2); font-weight: 600; }
+th:first-child, td:first-child { text-align: left; }
+tr.best td { background: var(--good-bg); }
+tr.best td:first-child { box-shadow: inset 3px 0 0 var(--good); }
+.tbl-scroll { overflow-x: auto; }
+.barcell { width: 32%; min-width: 120px; }
+.bar { height: 10px; border-radius: 0 4px 4px 0; display: block; }
+.delta { color: var(--text-2); }
+
+.chart-box { position: relative; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.axis text { fill: var(--muted); font-size: 11px; }
+.axis line { stroke: var(--grid); }
+.axis .base { stroke: var(--border); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; color: var(--text-2); margin: 0 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  font-variant-numeric: tabular-nums; min-width: 190px; display: none; z-index: 2;
+}
+.tip .t { font-weight: 600; margin-bottom: 4px; }
+.tip .r { display: grid; grid-template-columns: 10px 1fr auto; gap: 6px; align-items: center; }
+.tip .r.b { font-weight: 700; }
+.tip .sw { width: 10px; height: 10px; }
+.bands { margin-top: 14px; }
+.band-list { list-style: none; padding: 0; margin: 8px 0 0; font-size: 0.88rem; }
+.band-list li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+footer { color: var(--muted); font-size: 0.82rem; margin-top: 12px; max-width: 80ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Franchise-Optimierer</h1>
+  <p class="lead">Welche Franchise der obligatorischen Grundversicherung (KVG) ist für Sie am günstigsten?
+    Tragen Sie Ihre Monatsprämien und erwarteten Behandlungskosten ein, dann rechnet das Tool alle Stufen durch
+    und zeigt, ab welchen Kosten welche Franchise am günstigsten ist. Prämien finden Sie auf
+    <a href="https://www.priminfo.admin.ch/de/praemien" target="_blank" rel="noopener">priminfo.admin.ch</a>.</p>
+
+  <div class="grid">
+    <div>
+      <section class="card">
+        <h2>1 · Monatsprämie je Franchise</h2>
+        <div id="premiums"></div>
+        <details>
+          <summary>Prämien aus der CHF-300-Prämie schätzen</summary>
+          <p class="hint">Der Rabatt für eine höhere Franchise darf höchstens 70 % des zusätzlichen Risikos (Franchise − 300) pro Jahr betragen (Art. 95 KVV).
+            Viele Versicherer gewähren weniger. Für echte Werte: priminfo.admin.ch.</p>
+          <div class="est"><label for="rebate">Rabatt in % des Mehrrisikos</label><input id="rebate" type="text" class="num" value="70"></div>
+          <button id="estimate" type="button">Prämien 500–2500 berechnen</button>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>2 · Behandlungskosten pro Jahr</h2>
+        <div class="cost-row cost-head"><span>Beschreibung</span><span>Anzahl</span><span></span><span style="text-align:right">Betrag CHF</span><span></span></div>
+        <div id="costs"></div>
+        <button id="addCost" type="button">+ Position</button>
+        <div class="row2" style="margin-top:14px"><label for="other">Sonstige Kosten (Fixbetrag, CHF)</label><input id="other" type="text" class="num" value="0"></div>
+        <label class="check"><input id="otherCovered" type="checkbox" checked> Über die Krankenkasse abgerechnet (zählt zu Franchise und Selbstbehalt). Sonst: selbst bezahlt, ohne Einfluss auf die Wahl.</label>
+        <div class="sum"><span>Über KK abgerechnet</span><span id="sumCovered">–</span></div>
+      </section>
+
+      <section class="card">
+        <h2>3 · Parameter</h2>
+        <div class="row2"><label for="sbRate">Selbstbehalt in %</label><input id="sbRate" type="text" class="num" value="10"></div>
+        <div class="row2"><label for="sbCap">Max. Selbstbehalt pro Jahr (CHF)</label><input id="sbCap" type="text" class="num" value="700"></div>
+        <p class="hint">Gesetzlich: 10 % Selbstbehalt, höchstens CHF 700 pro Jahr für Erwachsene. 0 = ohne Obergrenze.</p>
+        <p style="margin:12px 0 0"><button id="reset" type="button">Beispielwerte laden</button></p>
+      </section>
+    </div>
+
+    <div>
+      <section class="card" aria-live="polite">
+        <div class="hero">
+          <div><div class="lbl">Günstigste Franchise</div><div class="big" id="bestF">–</div></div>
+          <div><div class="lbl">Gesamtkosten pro Jahr</div><div class="val" id="bestTotal">–</div></div>
+          <div><div class="lbl">Ersparnis ggü. teuerster Wahl</div><div class="val" id="saving">–</div></div>
+          <div><div class="lbl">Ersparnis ggü. CHF 300</div><div class="val" id="saving300">–</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Vergleich bei Ihren Kosten</h2>
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr><th>Franchise</th><th>Prämien/Jahr</th><th>Franchise­anteil</th><th>Selbstbehalt</th><th>Total</th><th>+ zum Optimum</th><th class="barcell" style="text-align:left">Mehrkosten</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <p class="hint">Total = 12 × Monatsprämie + Franchiseanteil + Selbstbehalt<span id="uncovNote"></span>.</p>
+      </section>
+
+      <section class="card">
+        <h2>Gesamtkosten in Abhängigkeit der Behandlungskosten</h2>
+        <div class="legend" id="legend"></div>
+        <div class="chart-box" id="chartBox">
+          <svg id="chart" viewBox="0 0 760 380" role="img" aria-label="Liniendiagramm: jährliche Gesamtkosten je Franchise in Abhängigkeit der Behandlungskosten"></svg>
+          <div class="tip" id="tip"></div>
+        </div>
+        <div class="bands">
+          <strong style="font-size:0.92rem">Optimale Franchise nach Kostenbereich</strong>
+          <ul class="band-list" id="bandList"></ul>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    Vereinfachtes Modell, ohne Gewähr. Nicht berücksichtigt: Spitalbeitrag (CHF 15 pro Tag), Leistungen bei Mutterschaft (ohne Kostenbeteiligung),
+    Kinder-Franchisen, Zusatzversicherungen sowie Kosten, die die Grundversicherung nicht übernimmt. Die Eingaben bleiben nur in Ihrem Browser gespeichert.
+  </footer>
+</div>
+
+<script>
+(() => {
+  const FR = [300, 500, 1000, 1500, 2000, 2500];
+  const COLORS = FR.map((_, i) => `var(--s${i + 1})`);
+  const STORE = 'franchise-optimierer-v1';
+  const nf = new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nf0 = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 });
+  const chf = v => 'CHF ' + nf.format(v);
+  const chf0 = v => 'CHF ' + nf0.format(Math.round(v));
+  const r05 = v => Math.round(v * 20) / 20;
+  const parse = s => {
+    if (typeof s === 'number') return s;
+    s = String(s || '').trim().replace(/['’\s]/g, '').replace(',', '.');
+    const v = parseFloat(s);
+    return Number.isFinite(v) ? v : 0;
+  };
+  const $ = id => document.getElementById(id);
+
+  const DEFAULTS = {
+    premiums: [420, 408.35, 379.15, 350, 320.85, 291.65],
+    costs: [{ d: 'Physiotherapie', n: 15, a: 206.40 }, { d: 'Hausarzt', n: 3, a: 120 }],
+    other: 0, otherCovered: true, sbRate: 10, sbCap: 700, rebate: 70
+  };
+  let state;
+  try { state = JSON.parse(localStorage.getItem(STORE)) || null; } catch (e) { state = null; }
+  if (!state || !Array.isArray(state.premiums) || state.premiums.length !== 6) state = structuredClone(DEFAULTS);
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
+
+  // ---------- Model ----------
+  function costShare(c, F, rate, cap) {
+    const fr = Math.min(c, F);
+    let sb = Math.max(0, c - F) * rate;
+    if (cap > 0) sb = Math.min(sb, cap);
+    return { fr, sb };
+  }
+  function evaluate(c, p) {
+    return FR.map((F, i) => {
+      const prem = 12 * p.premiums[i];
+      const { fr, sb } = costShare(c, F, p.rate, p.cap);
+      return { F, i, prem, fr, sb, total: prem + fr + sb + p.uncovered };
+    });
+  }
+  function params() {
+    const covered = state.costs.reduce((s, r) => s + parse(r.n) * parse(r.a), 0) + (state.otherCovered ? parse(state.other) : 0);
+    return {
+      premiums: state.premiums.map(parse),
+      rate: parse(state.sbRate) / 100,
+      cap: parse(state.sbCap),
+      uncovered: state.otherCovered ? 0 : parse(state.other),
+      covered
+    };
+  }
+
+  // ---------- Inputs ----------
+  function buildPremiums() {
+    $('premiums').innerHTML = FR.map((F, i) => `
+      <div class="prem-row"><span class="sw" style="background:${COLORS[i]}"></span>
+      <label for="p${i}">Franchise CHF ${nf0.format(F)}</label>
+      <input id="p${i}" type="text" inputmode="decimal" class="num" value="${nf.format(parse(state.premiums[i]))}"></div>`).join('');
+    FR.forEach((_, i) => $('p' + i).addEventListener('input', e => { state.premiums[i] = parse(e.target.value); update(); }));
+  }
+  function buildCosts() {
+    const box = $('costs');
+    box.innerHTML = '';
+    state.costs.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'cost-row';
+      row.innerHTML = `<input type="text" aria-label="Beschreibung" placeholder="z. B. Physio" value="${String(r.d || '').replace(/"/g, '&quot;')}">
+        <input type="text" inputmode="numeric" aria-label="Anzahl" class="num" value="${parse(r.n)}">
+        <span class="x">×</span>
+        <input type="text" inputmode="decimal" aria-label="Betrag CHF" class="num" value="${nf.format(parse(r.a))}">
+        <button type="button" aria-label="Position entfernen" title="Entfernen">✕</button>`;
+      const [d, n, a] = row.querySelectorAll('input');
+      d.addEventListener('input', () => { r.d = d.value; save(); });
+      n.addEventListener('input', () => { r.n = parse(n.value); update(); });
+      a.addEventListener('input', () => { r.a = parse(a.value); update(); });
+      row.querySelector('button').addEventListener('click', () => { state.costs.splice(i, 1); buildCosts(); update(); });
+      box.appendChild(row);
+    });
+  }
+  function bindScalar(id, key) {
+    const el = $(id);
+    el.value = typeof state[key] === 'number' && key === 'other' ? nf.format(state[key]) : state[key];
+    el.addEventListener('input', () => { state[key] = parse(el.value); update(); });
+  }
+  function buildAll() {
+    buildPremiums(); buildCosts();
+    bindScalar('other', 'other'); bindScalar('sbRate', 'sbRate'); bindScalar('sbCap', 'sbCap'); bindScalar('rebate', 'rebate');
+    $('otherCovered').checked = !!state.otherCovered;
+  }
+  $('otherCovered').addEventListener('change', e => { state.otherCovered = e.target.checked; update(); });
+  $('addCost').addEventListener('click', () => { state.costs.push({ d: '', n: 1, a: 0 }); buildCosts(); update(); });
+  $('estimate').addEventListener('click', () => {
+    const base = parse(state.premiums[0]);
+    const k = parse(state.rebate) / 100;
+    state.premiums = FR.map(F => Math.max(0, r05(base - k * (F - 300) / 12)));
+    buildPremiums(); update();
+  });
+  $('reset').addEventListener('click', () => {
+    state = structuredClone(DEFAULTS);
+    ['other', 'sbRate', 'sbCap', 'rebate'].forEach(id => { const el = $(id); el.replaceWith(el.cloneNode(true)); });
+    buildAll(); update();
+  });
+
+  // ---------- Output ----------
+  function update() {
+    save();
+    const p = params();
+    $('sumCovered').textContent = chf(p.covered);
+    const res = evaluate(p.covered, p);
+    const sorted = [...res].sort((a, b) => a.total - b.total || a.F - b.F);
+    const best = sorted[0], worst = sorted[sorted.length - 1];
+    $('bestF').textContent = chf0(best.F);
+    $('bestTotal').textContent = chf(best.total);
+    $('saving').textContent = chf(worst.total - best.total);
+    $('saving300').textContent = chf(res[0].total - best.total);
+    $('uncovNote').textContent = p.uncovered ? ` + selbst bezahlte sonstige Kosten (${chf(p.uncovered)})` : '';
+
+    const maxD = Math.max(...res.map(r => r.total - best.total), 1);
+    $('tbody').innerHTML = res.map(r => {
+      const isBest = r.F === best.F;
+      const d = r.total - best.total;
+      return `<tr class="${isBest ? 'best' : ''}">
+        <td><span class="sw" style="display:inline-block;vertical-align:-1px;margin-right:6px;background:${COLORS[r.i]}"></span>CHF ${nf0.format(r.F)}${isBest ? ' <span class="badge">optimal</span>' : ''}</td>
+        <td>${nf.format(r.prem)}</td><td>${nf.format(r.fr)}</td><td>${nf.format(r.sb)}</td>
+        <td><strong>${nf.format(r.total)}</strong></td>
+        <td class="delta">${isBest ? '–' : '+' + nf.format(d)}</td>
+        <td class="barcell"><span class="bar" style="width:${Math.max(0.5, (r.total - best.total) / maxD * 100).toFixed(1)}%;background:${COLORS[r.i]}"></span></td></tr>`;
+    }).join('');
+    drawChart(p);
+  }
+
+  // Ranges of covered costs where each franchise is optimal (sweep in CHF 1 steps)
+  function optimalBands(p, xMax) {
+    const bands = [];
+    for (let c = 0; c <= xMax; c += 1) {
+      const res = evaluate(c, p);
+      let b = res[0];
+      for (const r of res) if (r.total < b.total - 1e-9) b = r;
+      const last = bands[bands.length - 1];
+      if (last && last.F === b.F) last.to = c; else bands.push({ F: b.F, i: b.i, from: c, to: c });
+    }
+    return bands;
+  }
+
+  let W = 760, H = 380; const M = { l: 64, r: 16, t: 12, b: 64 };
+  let lastP = null;
+  window.addEventListener('resize', () => { if (lastP) drawChart(lastP); });
+  let chartCtx = null;
+  function niceStep(range, n) {
+    const raw = range / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / mag;
+    return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+  }
+  function drawChart(p) {
+    lastP = p;
+    const svg = $('chart');
+    W = Math.round(Math.max(340, Math.min(760, $('chartBox').clientWidth || 760)));
+    H = W < 520 ? 360 : 380;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const capRange = p.cap > 0 ? p.cap / Math.max(p.rate, 1e-9) : 7000;
+    let xMax = Math.max(6000, 2500 + capRange + 1000, p.covered * 1.25);
+    const xs = niceStep(xMax, 6); xMax = Math.ceil(xMax / xs) * xs;
+    const pts = [];
+    for (let k = 0; k <= 200; k++) pts.push((xMax * k) / 200);
+    FR.forEach(F => pts.push(F)); if (p.cap > 0) FR.forEach(F => pts.push(F + p.cap / Math.max(p.rate, 1e-9)));
+    pts.push(p.covered);
+    const xsList = [...new Set(pts.filter(x => x >= 0 && x <= xMax))].sort((a, b) => a - b);
+    const series = FR.map((F, i) => xsList.map(c => [c, evaluate(c, p)[i].total]));
+    let yMin = Infinity, yMax = -Infinity;
+    series.forEach(s => s.forEach(([, y]) => { yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }));
+    const ys = niceStep(Math.max(yMax - yMin, 100), 5);
+    yMin = Math.max(0, Math.floor(yMin / ys) * ys); yMax = Math.ceil(yMax / ys) * ys;
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    const X = c => M.l + (c / xMax) * pw;
+    const Y = v => M.t + ph - ((v - yMin) / (yMax - yMin || 1)) * ph;
+
+    let g = '<g class="axis">';
+    for (let v = yMin; v <= yMax + 1e-6; v += ys) {
+      g += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}" ${v === yMin ? 'class="base"' : ''}/>`;
+      g += `<text x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${nf0.format(v)}</text>`;
+    }
+    for (let v = 0; v <= xMax + 1e-6; v += xs) g += `<text x="${X(v)}" y="${M.t + ph + 16}" text-anchor="middle">${nf0.format(v)}</text>`;
+    g += `<text x="${M.l + pw / 2}" y="${M.t + ph + 34}" text-anchor="middle">Über die KK abgerechnete Behandlungskosten pro Jahr (CHF)</text>`;
+    g += `<text transform="translate(14 ${M.t + ph / 2}) rotate(-90)" text-anchor="middle">Gesamtkosten pro Jahr (CHF)</text></g>`;
+
+    // optimal-band strip below plot
+    const bands = optimalBands(p, xMax);
+    let strip = '';
+    bands.forEach(b => {
+      const x1 = X(b.from), x2 = X(Math.min(b.to + 1, xMax));
+      strip += `<rect x="${x1 + 1}" y="${M.t + ph + 44}" width="${Math.max(0, x2 - x1 - 2)}" height="8" rx="3" fill="${COLORS[b.i]}"><title>CHF ${nf0.format(b.F)} optimal: ${nf0.format(b.from)}–${nf0.format(b.to)}</title></rect>`;
+    });
+    strip += `<text x="${M.l}" y="${M.t + ph + 62}" class="axis" style="fill:var(--muted);font-size:10px">Band: jeweils günstigste Franchise</text>`;
+
+    let lines = '';
+    series.forEach((s, i) => {
+      const d = s.map(([x, y], k) => (k ? 'L' : 'M') + X(x).toFixed(1) + ' ' + Y(y).toFixed(1)).join(' ');
+      lines += `<path d="${d}" fill="none" stroke="${COLORS[i]}" stroke-width="2" stroke-linejoin="round"/>`;
+    });
+    // current position marker
+    const cx = X(Math.min(p.covered, xMax));
+    const cur = evaluate(p.covered, p);
+    let marker = `<line x1="${cx}" x2="${cx}" y1="${M.t}" y2="${M.t + ph}" stroke="var(--text-2)" stroke-dasharray="4 4" stroke-width="1"/>
+      <text x="${cx + (cx > W - 140 ? -6 : 6)}" y="${M.t + 12}" text-anchor="${cx > W - 140 ? 'end' : 'start'}" style="fill:var(--text-2);font-size:11px;font-weight:600">Ihre Kosten: ${nf0.format(p.covered)}</text>`;
+    cur.forEach(r => { marker += `<circle cx="${cx}" cy="${Y(r.total)}" r="4" fill="${COLORS[r.i]}" stroke="var(--surface)" stroke-width="2"/>`; });
+
+    svg.innerHTML = g + lines + marker + strip +
+      `<g id="hover" style="display:none"><line id="hl" y1="${M.t}" y2="${M.t + ph}" stroke="var(--muted)" stroke-width="1"/><g id="hdots"></g></g>` +
+      `<rect id="hit" x="${M.l}" y="${M.t}" width="${pw}" height="${ph}" fill="transparent"/>`;
+
+    $('legend').innerHTML = FR.map((F, i) => `<span><i style="background:${COLORS[i]}"></i>CHF ${nf0.format(F)}</span>`).join('');
+    $('bandList').innerHTML = bands.map(b => {
+      const to = b.to >= xMax ? `ab CHF ${nf0.format(b.from)}` : `CHF ${nf0.format(b.from)} – ${nf0.format(b.to)}`;
+      return `<li><span class="sw" style="background:${COLORS[b.i]}"></span><span><strong>Franchise CHF ${nf0.format(b.F)}</strong>: ${b.from === 0 && b.to >= xMax ? 'immer' : to}</span></li>`;
+    }).join('');
+
+    chartCtx = { p, X, Y, xMax, pw, ph };
+    $('hit').addEventListener('pointermove', onHover);
+    $('hit').addEventListener('pointerleave', () => { $('hover').style.display = 'none'; $('tip').style.display = 'none'; });
+  }
+  function onHover(ev) {
+    const { p, X, Y, xMax, pw } = chartCtx;
+    const svg = $('chart');
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    let c = ((loc.x - M.l) / pw) * xMax;
+    c = Math.max(0, Math.min(xMax, Math.round(c / 50) * 50));
+    const res = evaluate(c, p);
+    const sorted = [...res].sort((a, b) => a.total - b.total || a.F - b.F);
+    $('hover').style.display = '';
+    $('hl').setAttribute('x1', X(c)); $('hl').setAttribute('x2', X(c));
+    $('hdots').innerHTML = res.map(r => `<circle cx="${X(c)}" cy="${Y(r.total)}" r="4" fill="${COLORS[r.i]}" stroke="var(--surface)" stroke-width="2"/>`).join('');
+    const tip = $('tip');
+    tip.innerHTML = `<div class="t">Behandlungskosten ${chf0(c)}</div>` + sorted.map((r, k) =>
+      `<div class="r${k === 0 ? ' b' : ''}"><span class="sw" style="background:${COLORS[r.i]}"></span><span>CHF ${nf0.format(r.F)}${k === 0 ? ' ★' : ''}</span><span>${nf0.format(r.total)}</span></div>`).join('');
+    tip.style.display = 'block';
+    const box = $('chartBox').getBoundingClientRect();
+    const px = ev.clientX - box.left, py = ev.clientY - box.top;
+    const tw = tip.offsetWidth;
+    tip.style.left = (px + 16 + tw > box.width ? px - tw - 16 : px + 16) + 'px';
+    tip.style.top = Math.max(0, py - 60) + 'px';
+  }
+
+  buildAll();
+  update();
+})();
+</script>
+</body>
+</html>
