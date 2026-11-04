@@ -1,5 +1,10 @@
 # Franchise-Optimierer (Grundversicherung KVG, Schweiz)
 
+<!-- AI-GENERATED-NOTE -->
+> [!NOTE]
+> This is an AI-generated research report. All text and code in this report was created by an LLM (Large Language Model). For more information on how these reports are created, see the [main research repository](https://github.com/etoulas/research).
+<!-- /AI-GENERATED-NOTE -->
+
 Ein Web-Tool, das für Ihre Prämien und erwarteten Behandlungskosten die **günstigste Franchise** findet
 (CHF 300, 500, 1'000, 1'500, 2'000, 2'500) und den Kostenverlauf grafisch zeigt.
 

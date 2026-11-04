@@ -183,7 +183,15 @@ for dirname, _ in subdirs_with_dates:
             readme_path.write_text('\n'.join(new_lines))
 
 ]]]-->
-## 2 research projects
+## 3 research projects
+
+### [Franchise-Optimierer (Grundversicherung KVG, Schweiz)](https://github.com/etoulas/research/tree/main/franchise-optimierer#readme) (2026-11-04 08:55)
+
+A single-page web tool calculates which Swiss KVG basic-insurance deductible (Franchise) is cheapest given a user's monthly premiums and expected annual treatment costs, covering all six statutory tiers from CHF 300 to CHF 2,500. The cost model sums annual premiums, the deductible portion, and the 10% coinsurance — importantly capping coinsurance at the legally mandated CHF 700 per year for adults, without which results at high cost levels would be wrong. Beyond the point estimate, it sweeps costs in CHF 1 increments to derive break-even ranges, rendered as a colour band beneath a hand-drawn SVG chart plus a sorted tooltip across all tiers. Where only the CHF 300 premium is known, a helper estimates the rest using the maximum statutory discount (up to 70% of additional risk, Art. 95 KVV, adjustable). It is available at [franchise-optimierer](https://etoulas.github.io/research/franchise-optimierer/), with premium data sourced from [priminfo.admin.ch](https://www.priminfo.admin.ch/de/praemien).
+
+- Results are typically "all or nothing": CHF 2,500 wins at low expected costs, CHF 300 at high ones; intermediate tiers only pay off when their discount is large relative to the deductible step.
+- Implemented as one dependency-free `index.html` (vanilla JS, custom SVG chart), with Swiss number formatting, lenient input parsing (`206.40`, `206,40`, `1'000`), dark mode, and localStorage-only persistence.
+- Out of scope: hospital daily contribution, maternity, child/youth tariffs, alternative insurance models, and supplementary insurance.
 
 ### [Which open-weights LLM actually runs well on a 4060 Ti 16 GB?](https://github.com/etoulas/research/tree/main/llm-4060ti-16gb#readme) (2026-09-02 11:46)
 
